@@ -4,28 +4,41 @@ import io
 import json
 import time
 
-max_records = 12
 bucket_name = 'rebeccacode-repo-a1'
 source_data_file_name = 'athlete_events.csv'
 
 
 def lambda_handler(event, context):
 
-    request_id = event['request_id']
-    criteria = Criteria(request_id).get_criteria(request_id)
-    result = Parser(request_id, criteria).parse()
+    criteria = Criteria.load_from_s3_event(event)
+    print(criteria)
+    if criteria is None:
+        raise FileNotFoundError('Request file referenced by event not found. {}'.format(event))
+
+    result = Parser(criteria['request_id'], criteria['criteria']).parse()
 
     return result
 
 
 class Criteria:
-    def __init__(self, request_id):
-        self.criteria_file_name = '{}-olympic-data-request.json'.format(request_id)
+    @staticmethod
+    def load_from_s3_event(event):
+        criteria_key = ''
+        for item in event['Records']:
+            print(item.keys())
+            if 's3' in item.keys():
+                criteria_key = item['s3']['object']['key']
 
-    def get_criteria(self, request_id):
+        if '' != criteria_key:
+            return Criteria.__get_criteria(criteria_key)
+        else:
+            return None
+
+    @staticmethod
+    def __get_criteria(criteria_file_name):
         criteria_str = ''
         try:
-            for data in S3ObjectOperators.yield_from_object(bucket_name, self.criteria_file_name):
+            for data in S3ObjectOperators.yield_from_object(bucket_name, criteria_file_name):
                 criteria_str = '{}{}'.format(criteria_str, data)
         except Exception as e:
             print(e)
@@ -33,11 +46,12 @@ class Criteria:
 
         criteria = eval(criteria_str)
 
-        return criteria['criteria']  # only want to return the content of the JSON criteria object
+        return criteria
 
 
 class Parser:
     def __init__(self, request_id, criteria):
+        self.request_id = request_id
         self.criteria_file_name = '{}-olympic-data-request.json'.format(request_id)
         self.result_summary_file_name = '{}-olympic-data-request-result-summary.json'.format(request_id)
         self.result_set_file_name = '{}-olympic-data-request-result-set.json'.format(request_id)
@@ -46,9 +60,8 @@ class Parser:
     def parse(self):
         s3_client = boto3.client('s3')
 
-        result_set = {'result_set': []}
-        result_summary = {'result_set_count': 0, 'result_set_date': '', 'result_set': ''}
-        result = {'result_set_date': '', 'result_summary_url': '', 'result_set_url': ''}
+        result_set = {'request_id': self.request_id, 'result_set': []}
+        result_summary = {'request_id': self.request_id, 'result_set_date': '', 'result_set_count': 0, 'result_set_url': ''}
 
         try:
             for record in self.__yield_matching_records():
@@ -59,8 +72,8 @@ class Parser:
                                  Body=json.dumps(result_set))
 
             result_summary['result_set_date'] = time.strftime('%Y/%m/%d %H:%M:%S', time.gmtime())
-            result_summary['count'] = len(result_set)
-            result_summary['result_set'] = s3_client.generate_presigned_url(
+            result_summary['result_set_count'] = len(result_set['result_set'])
+            result_summary['result_set_url'] = s3_client.generate_presigned_url(
                 ClientMethod='get_object',
                 Params={
                     'Bucket': bucket_name,
@@ -72,10 +85,7 @@ class Parser:
                                  Key=self.result_summary_file_name,
                                  Body=json.dumps(result_summary))
 
-            result['result_set_date'] = result_summary['result_set_date']
-
-            result['result_set_url'] = result_summary['result_set']
-
+            result = result_summary.copy()
             result['result_summary_url'] = s3_client.generate_presigned_url(
                 ClientMethod='get_object',
                 Params={

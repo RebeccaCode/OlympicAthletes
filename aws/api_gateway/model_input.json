@@ -1,0 +1,24 @@
+{
+	"$schema": "http://json-schema.org/draft-04/schema#",
+	"title": "JSON schema for an Olympic Event Data Request",
+
+	"type": "object",
+	"additionalProperties": true,
+
+	"properties": {
+		"criteria": {
+			"description": "Array (dict) of criteria for filtering Olympic Event Data",
+			"type": "array",
+			"items": {
+				"type": "object",
+				"minItems": 1,
+                "properties": {
+                    "attribute": {"type": "string"},
+                    "operator": {"type": "string"},
+                    "value": {"type": "string"}
+                },
+                "required": ["attribute", "operator", "value"]
+			}
+		}
+	}
+}
