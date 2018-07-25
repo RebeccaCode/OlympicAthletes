@@ -1,0 +1,14 @@
+import json
+import urllib.parse
+
+
+def lambda_handler(event, context):
+    criteria = {}
+    criteria['operators'] = ['Equals', 'Starts with', 'Contains', 'Less than', 'Greater than']
+    criteria['special_values'] = {'ignore': None, 'not_available': 'NA'}
+    criteria['attributes'] = ['CompositeKey', 'ID', 'Name', 'Sex', 'Age',
+                              'Height', 'Weight', 'Team', 'NOC', 'Games',
+                              'Year', 'Season', 'City', 'Sport', 'Event',
+                              'Medal']
+
+    return criteria
