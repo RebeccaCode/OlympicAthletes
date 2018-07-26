@@ -10,7 +10,13 @@ source_data_file_name = 'athlete_events.csv'
 
 def lambda_handler(event, context):
 
-    criteria = Criteria.load_from_s3_event(event)
+    if 'Records' in event.keys():
+        criteria = Criteria.load_from_s3_event(event)
+    elif 'request_id' in event.keys():
+        criteria = Criteria.load_from_request_id(event['request_id'])
+    else:
+        criteria = None
+
     print(criteria)
     if criteria is None:
         raise FileNotFoundError('Request file referenced by event not found. {}'.format(event))
@@ -21,6 +27,11 @@ def lambda_handler(event, context):
 
 
 class Criteria:
+    @staticmethod
+    def load_from_request_id(request_id):
+        criteria_key = '{}-olympic-data-request.json'.format(request_id)
+        return Criteria.__get_criteria(criteria_key)
+
     @staticmethod
     def load_from_s3_event(event):
         criteria_key = ''
